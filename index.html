@@ -55,10 +55,9 @@ ol.lines{list-style:none;margin:0;padding:0}
 @media (prefers-reduced-motion:reduce){.line{animation:none}}
 .num{font-style:italic;color:var(--amber);font-size:.95rem;padding-top:3px}
 .txt{font-size:1.28rem;line-height:1.42;text-align:left;white-space:pre-wrap;width:100%}
-.stars{display:flex;gap:1px;margin-top:6px;align-items:center}
-.stars button{font-size:1rem;line-height:1;padding:3px 3px 3px 0;color:var(--rule)}
-.stars button.on{color:var(--amber)}
-.note{font-style:italic;font-size:.88rem;color:var(--red);margin-left:10px}
+.line.pinned .num{font-style:normal;font-size:.9rem;padding-top:5px}
+.line.pinned .txt{font-weight:500}
+.line.lastpin{border-bottom:1px solid var(--amber)}
 
 .write{display:grid;grid-template-columns:2.2rem 1fr;padding:16px 0;border-bottom:1px solid var(--rule)}
 .write .num{color:var(--faint)}
@@ -84,7 +83,6 @@ details.int .num{color:var(--faint)}
 .grab{width:38px;height:4px;border-radius:2px;background:var(--rule);margin:0 auto 16px}
 .sheet h3{font-weight:400;font-size:1.3rem;line-height:1.4;margin:0 0 4px}
 .sheet .sub{font-family:var(--sans);font-size:.78rem;color:var(--faint);margin:0 0 14px}
-.sheet .stars button{font-size:1.6rem;padding:4px 8px 4px 0}
 .opts{display:grid;margin-top:14px;border-top:1px solid var(--rule)}
 .opts button,.opts a{font-family:var(--sans);font-size:.95rem;text-align:left;padding:14px 0;border-bottom:1px solid var(--rule);color:var(--ink);text-decoration:none}
 .opts .danger{color:var(--red)}
@@ -113,11 +111,12 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmt = t => new Date(t).toLocaleDateString(undefined, {month:"short", day:"numeric", year:"numeric"});
 const roman = n => { let r = "", m = [[1000,"m"],[900,"cm"],[500,"d"],[400,"cd"],[100,"c"],[90,"xc"],[50,"l"],[40,"xl"],[10,"x"],[9,"ix"],[5,"v"],[4,"iv"],[1,"i"]]; for (const [v, s] of m) while (n >= v) { r += s; n -= v; } return r + "."; };
-const SORTS = {rating: "by rating", new: "newest first", shuffle: "shuffled"};
+const SORTS = {new: "newest first", old: "oldest first", shuffle: "shuffled"};
 
 let S;
 try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
-if (!S || !Array.isArray(S.focuses)) S = {focuses: [], items: [], current: null, sort: "rating"};
+if (!S || !Array.isArray(S.focuses)) S = {focuses: [], items: [], current: null, sort: "new"};
+if (!(S.sort in SORTS)) S.sort = "new";
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { toast("Couldn't save"); } };
 let shuffleOrder = null, animate = true;
 
@@ -125,7 +124,6 @@ function toast(msg) {
   const t = document.createElement("div"); t.className = "toast"; t.textContent = msg;
   document.body.appendChild(t); setTimeout(() => t.remove(), 1800);
 }
-const stars = (r, size) => [1,2,3,4,5].map(n => `<button type="button" data-a="rate" data-r="${n}" class="${n <= (r || 0) ? "on" : ""}" aria-label="Rate ${n} of 5">★</button>`).join("");
 const focus = () => S.focuses.find(f => f.id === S.current);
 const live = id => S.items.filter(i => i.focusId === id && !i.retired);
 
@@ -143,25 +141,25 @@ function render() {
   }
 
   let items = live(f.id);
-  const rated = items.filter(i => i.rating);
-  const avg = rated.length ? (rated.reduce((a, i) => a + i.rating, 0) / rated.length).toFixed(1) : null;
-  if (S.sort === "rating") items.sort((a, b) => (b.rating || 0) - (a.rating || 0) || b.created - a.created);
+  const pinCount = items.filter(i => i.pinned).length;
+  if (S.sort === "old") items.sort((a, b) => a.created - b.created);
   else if (S.sort === "new") items.sort((a, b) => b.created - a.created);
   else { if (!shuffleOrder) shuffleOrder = new Map(S.items.map(i => [i.id, Math.random()])); items.sort((a, b) => (shuffleOrder.get(a.id) ?? 0) - (shuffleOrder.get(b.id) ?? 0)); }
 
+  items = [...items.filter(i => i.pinned).sort((x, y) => x.pinnedAt - y.pinnedAt), ...items.filter(i => !i.pinned)];
   const ret = S.items.filter(i => i.focusId === f.id && i.retired).sort((a, b) => b.retiredAt - a.retiredAt);
-  const lines = items.map((i, k) => `<li class="line" data-i="${i.id}" style="animation-delay:${animate ? k * 70 : 0}ms${animate ? "" : ";animation:none"}">
-      <span class="num">${roman(k + 1)}</span>
-      <div><button type="button" class="txt" data-a="open">${esc(i.text)}</button>
-      <div class="stars">${stars(i.rating)}${i.rating && i.rating <= 2 ? `<span class="note">rewrite or let go?</span>` : ""}</div></div></li>`).join("");
+  let n = 0;
+  const lines = items.map((i, k) => `<li class="line${i.pinned ? " pinned" : ""}${i.pinned && k === pinCount - 1 && pinCount < items.length ? " lastpin" : ""}" data-i="${i.id}" style="animation-delay:${animate ? k * 70 : 0}ms${animate ? "" : ";animation:none"}">
+      <span class="num"${i.pinned ? ' aria-label="Pinned"' : ""}>${i.pinned ? "✦" : roman(++n)}</span>
+      <div><button type="button" class="txt" data-a="open">${esc(i.text)}</button></div></li>`).join("");
 
   $("#main").innerHTML = `
     <header class="page"><div><h1>${esc(f.name)}</h1><p class="date">${today()}</p></div>
       <button type="button" class="more" data-a="menu" aria-label="Focus options">⋯</button></header>
-    <div class="meta"><span>${items.length} line${items.length === 1 ? "" : "s"}${avg ? ` · avg ${avg}★` : ""}</span>
+    <div class="meta"><span>${items.length} line${items.length === 1 ? "" : "s"}${pinCount ? ` · ${pinCount} pinned` : ""}</span>
       <button type="button" data-a="sort">${SORTS[S.sort]} ▾</button></div>
     <ol class="lines">${lines}</ol>
-    <div class="write"><span class="num">${roman(items.length + 1)}</span>
+    <div class="write"><span class="num">${roman(items.length - pinCount + 1)}</span>
       <textarea id="newText" rows="1" placeholder="Write a new line…" aria-label="New line"></textarea>
       <button type="button" class="go" data-a="add" hidden id="goBtn">Add to ${esc(f.name)}</button></div>
     ${ret.length ? `<details class="int"><summary>Integrated · ${ret.length}</summary><ol class="lines" style="margin-top:12px">${
@@ -176,7 +174,7 @@ const today = () => new Date().toLocaleDateString(undefined, {weekday:"long", mo
 function addItem() {
   const ta = $("#newText"), text = ta.value.trim();
   if (!text || !S.current) return;
-  S.items.push({id: uid(), focusId: S.current, text, rating: 0, ratings: [], history: [], created: Date.now(), retired: false});
+  S.items.push({id: uid(), focusId: S.current, text, pinned: false, history: [], created: Date.now(), retired: false});
   save(); render(); toast("Added");
 }
 
@@ -188,16 +186,16 @@ const closeSheet = () => { $("#sheetRoot").innerHTML = ""; };
 
 function itemSheet(it, editing) {
   const hist = it.history?.length ? `<div class="hist"><p class="sub" style="margin:18px 0 0">Earlier versions</p>${
-    it.history.slice().reverse().map(h => `<p>${esc(h.text)}<br><small>${fmt(h.date)}${h.rating ? ` · ${h.rating}★` : ""}</small></p>`).join("")}</div>` : "";
+    it.history.slice().reverse().map(h => `<p>${esc(h.text)}<br><small>${fmt(h.date)}</small></p>`).join("")}</div>` : "";
   if (editing) return sheet(`<div data-i="${it.id}"><p class="sub">Edit line</p>
     <textarea id="editText">${esc(it.text)}</textarea>
-    <p class="help">The old wording is kept below, and the rating resets so you can rate the new version fresh.</p>
+    <p class="help">The old wording is kept below.</p>
     <div class="row"><button type="button" class="primary" data-a="saveEdit">Save</button><button type="button" data-a="close">Cancel</button></div>${hist}</div>`);
   if (it.retired) return sheet(`<div data-i="${it.id}"><h3>${esc(it.text)}</h3><p class="sub">Integrated ${fmt(it.retiredAt)}</p>
     <div class="opts"><button type="button" data-a="restore">Bring back into rotation</button><button type="button" class="danger" data-a="del">Delete</button></div>${hist}</div>`);
   sheet(`<div data-i="${it.id}"><h3>${esc(it.text)}</h3><p class="sub">Written ${fmt(it.created)}</p>
-    <div class="stars">${stars(it.rating)}</div>
     <div class="opts">
+      <button type="button" data-a="pin">${it.pinned ? "Unpin" : "Pin to top"}</button>
       <button type="button" data-a="edit">Edit wording</button>
       <button type="button" data-a="retire">Mark as integrated <span class="help">· it's simply true now</span></button>
       <button type="button" class="danger" data-a="del">Delete</button>
@@ -237,18 +235,14 @@ document.addEventListener("click", async e => {
   switch (a) {
     case "close": return closeSheet();
     case "open": return it && itemSheet(it);
-    case "rate": {
-      const r = +b.dataset.r; it.rating = it.rating === r ? 0 : r;
-      if (it.rating) it.ratings.push({r, date: Date.now()});
-      save(); render(); if (inSheet) itemSheet(it); return;
-    }
+    case "pin": it.pinned = !it.pinned; it.pinnedAt = Date.now(); toast(it.pinned ? "Pinned" : "Unpinned"); break;
     case "edit": itemSheet(it, true); setTimeout(() => $("#editText")?.focus(), 50); return;
     case "saveEdit": {
       const v = $("#editText").value.trim();
-      if (v && v !== it.text) { it.history.push({text: it.text, date: Date.now(), rating: it.rating}); it.text = v; it.rating = 0; }
+      if (v && v !== it.text) { it.history.push({text: it.text, date: Date.now()}); it.text = v; }
       break;
     }
-    case "retire": it.retired = true; it.retiredAt = Date.now(); toast("Moved to Integrated"); break;
+    case "retire": it.retired = true; it.pinned = false; it.retiredAt = Date.now(); toast("Moved to Integrated"); break;
     case "restore": it.retired = false; delete it.retiredAt; break;
     case "del": if (!confirm("Delete this line for good?")) return; S.items = S.items.filter(x => x !== it); break;
     case "add": return addItem();
