@@ -90,6 +90,11 @@ details.int .num{color:var(--faint)}
 .row{display:flex;gap:18px;margin-top:12px;font-family:var(--sans);font-size:.92rem}
 .row .primary{color:var(--amber);font-weight:500}
 .hist p{margin:10px 0 0;padding-left:12px;border-left:2px solid var(--rule);color:var(--soft);font-size:1rem}
+.order{list-style:none;margin:6px 0 0;padding:0;border-top:1px solid var(--rule)}
+.order li{display:flex;align-items:center;gap:6px;padding:10px 0;border-bottom:1px solid var(--rule)}
+.order .nm{flex:1;font-size:1.15rem}
+.order button{font-family:var(--sans);font-size:1.05rem;color:var(--soft);width:42px;height:38px;border:1px solid var(--rule);border-radius:10px}
+.order button:disabled{opacity:.3}
 .hist small{font-family:var(--sans);font-size:.72rem;color:var(--faint)}
 .help{font-family:var(--sans);font-size:.85rem;color:var(--soft);line-height:1.55}
 .help ol{padding-left:18px;margin:6px 0}
@@ -179,8 +184,8 @@ function addItem() {
 }
 
 /* ---------- sheets ---------- */
-function sheet(html) {
-  $("#sheetRoot").innerHTML = `<div class="scrim" data-a="close"></div><div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${html}</div>`;
+function sheet(html, still) {
+  $("#sheetRoot").innerHTML = `<div class="scrim" data-a="close"${still ? ' style="animation:none"' : ""}></div><div class="sheet" role="dialog"${still ? ' style="animation:none"' : ""} aria-modal="true"><div class="grab"></div>${html}</div>`;
 }
 const closeSheet = () => { $("#sheetRoot").innerHTML = ""; };
 
@@ -207,6 +212,7 @@ function menuSheet() {
   sheet(`<p class="sub">${esc(f.name)}</p>
     <div class="opts">
       <button type="button" data-a="rename">Rename focus</button>
+      <button type="button" data-a="reorder">Reorder focuses</button>
       <button type="button" data-a="newFocus">New focus</button>
       <button type="button" data-a="export">Export backup</button>
       <button type="button" data-a="import">Import backup</button>
@@ -214,6 +220,15 @@ function menuSheet() {
       <button type="button" class="danger" data-a="delFocus">Delete this focus</button>
     </div>
     <p class="help" style="margin-top:14px">Everything is saved on this phone only. Export now and then.</p>`);
+}
+
+function orderSheet(still) {
+  const n = S.focuses.length;
+  sheet(`<h3>Reorder focuses</h3><p class="sub">The order here is the order of the tabs.</p>
+    <ol class="order">${S.focuses.map((f, k) => `<li><span class="nm">${esc(f.name)}</span>
+      <button type="button" data-a="up" data-k="${k}" aria-label="Move ${esc(f.name)} up"${k === 0 ? " disabled" : ""}>↑</button>
+      <button type="button" data-a="down" data-k="${k}" aria-label="Move ${esc(f.name)} down"${k === n - 1 ? " disabled" : ""}>↓</button></li>`).join("")}</ol>
+    <div class="row"><button type="button" class="primary" data-a="close">Done</button></div>`, still);
 }
 
 function reminderSheet() {
@@ -253,6 +268,12 @@ document.addEventListener("click", async e => {
       closeSheet();
       const name = (prompt("Name this focus (e.g. Art, Samyama, Abundance)") || "").trim(); if (!name) return;
       const f = {id: uid(), name}; S.focuses.push(f); S.current = f.id; save(); render(); $("#newText")?.focus(); return;
+    }
+    case "reorder": return orderSheet();
+    case "up": case "down": {
+      const k = +b.dataset.k, j = a === "up" ? k - 1 : k + 1;
+      [S.focuses[k], S.focuses[j]] = [S.focuses[j], S.focuses[k]];
+      save(); render(); return orderSheet(true);
     }
     case "rename": { const f = focus(); const n = (prompt("Rename focus", f.name) || "").trim(); if (n) f.name = n; break; }
     case "delFocus": {
