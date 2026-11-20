@@ -40,6 +40,9 @@ button:focus-visible,textarea:focus-visible{outline:2px solid var(--amber);outli
 .tab{flex:none;font-family:var(--sans);font-size:.8rem;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);padding:10px 0 9px;border-bottom:2px solid transparent;margin-bottom:-1px}
 .tab[aria-current="true"]{color:var(--ink);border-color:var(--amber)}
 .tab.add{color:var(--amber)}
+.tab{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;transition:transform .15s ease,color .15s}
+.tab.dragging{color:var(--amber);border-color:var(--amber);transform:scale(1.12)}
+.tabs.sorting .tab:not(.dragging){color:var(--soft)}
 
 header.page{display:flex;justify-content:space-between;align-items:flex-start;margin:30px 0 6px}
 h1{font-weight:400;font-size:2.4rem;line-height:1.1;margin:0;letter-spacing:-.01em}
@@ -90,11 +93,6 @@ details.int .num{color:var(--faint)}
 .row{display:flex;gap:18px;margin-top:12px;font-family:var(--sans);font-size:.92rem}
 .row .primary{color:var(--amber);font-weight:500}
 .hist p{margin:10px 0 0;padding-left:12px;border-left:2px solid var(--rule);color:var(--soft);font-size:1rem}
-.order{list-style:none;margin:6px 0 0;padding:0;border-top:1px solid var(--rule)}
-.order li{display:flex;align-items:center;gap:6px;padding:10px 0;border-bottom:1px solid var(--rule)}
-.order .nm{flex:1;font-size:1.15rem}
-.order button{font-family:var(--sans);font-size:1.05rem;color:var(--soft);width:42px;height:38px;border:1px solid var(--rule);border-radius:10px}
-.order button:disabled{opacity:.3}
 .hist small{font-family:var(--sans);font-size:.72rem;color:var(--faint)}
 .help{font-family:var(--sans);font-size:.85rem;color:var(--soft);line-height:1.55}
 .help ol{padding-left:18px;margin:6px 0}
@@ -212,23 +210,13 @@ function menuSheet() {
   sheet(`<p class="sub">${esc(f.name)}</p>
     <div class="opts">
       <button type="button" data-a="rename">Rename focus</button>
-      <button type="button" data-a="reorder">Reorder focuses</button>
       <button type="button" data-a="newFocus">New focus</button>
       <button type="button" data-a="export">Export backup</button>
       <button type="button" data-a="import">Import backup</button>
       <button type="button" data-a="reminder">Daily reminder setup</button>
       <button type="button" class="danger" data-a="delFocus">Delete this focus</button>
     </div>
-    <p class="help" style="margin-top:14px">Everything is saved on this phone only. Export now and then.</p>`);
-}
-
-function orderSheet(still) {
-  const n = S.focuses.length;
-  sheet(`<h3>Reorder focuses</h3><p class="sub">The order here is the order of the tabs.</p>
-    <ol class="order">${S.focuses.map((f, k) => `<li><span class="nm">${esc(f.name)}</span>
-      <button type="button" data-a="up" data-k="${k}" aria-label="Move ${esc(f.name)} up"${k === 0 ? " disabled" : ""}>↑</button>
-      <button type="button" data-a="down" data-k="${k}" aria-label="Move ${esc(f.name)} down"${k === n - 1 ? " disabled" : ""}>↓</button></li>`).join("")}</ol>
-    <div class="row"><button type="button" class="primary" data-a="close">Done</button></div>`, still);
+    <p class="help" style="margin-top:14px">To reorder the tabs, press and hold one, then drag it. Everything is saved on this phone only, so export now and then.</p>`);
 }
 
 function reminderSheet() {
@@ -269,12 +257,6 @@ document.addEventListener("click", async e => {
       const name = (prompt("Name this focus (e.g. Art, Samyama, Abundance)") || "").trim(); if (!name) return;
       const f = {id: uid(), name}; S.focuses.push(f); S.current = f.id; save(); render(); $("#newText")?.focus(); return;
     }
-    case "reorder": return orderSheet();
-    case "up": case "down": {
-      const k = +b.dataset.k, j = a === "up" ? k - 1 : k + 1;
-      [S.focuses[k], S.focuses[j]] = [S.focuses[j], S.focuses[k]];
-      save(); render(); return orderSheet(true);
-    }
     case "rename": { const f = focus(); const n = (prompt("Rename focus", f.name) || "").trim(); if (n) f.name = n; break; }
     case "delFocus": {
       const f = focus(), n = S.items.filter(i => i.focusId === f.id).length;
@@ -303,6 +285,67 @@ $("#importFile").onchange = async e => {
   e.target.value = "";
 };
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeSheet(); });
+
+/* ---------- drag to reorder tabs (press and hold, then drag) ---------- */
+(() => {
+  const bar = $("#tabs");
+  let timer = null, drag = null, startX = 0, startY = 0, lastX = 0, raf = 0, justDragged = false;
+  const tabs = () => [...bar.querySelectorAll(".tab[data-f]")];
+  function begin(el) {
+    drag = el; el.classList.add("dragging"); bar.classList.add("sorting");
+    if (navigator.vibrate) navigator.vibrate(10);
+    const tick = () => {
+      const r = bar.getBoundingClientRect();
+      if (lastX < r.left + 40) bar.scrollLeft -= 6; else if (lastX > r.right - 40) bar.scrollLeft += 6;
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+  }
+  function move(x) {
+    lastX = x;
+    if (!drag) return;
+    for (const t of tabs()) {
+      if (t === drag) continue;
+      const r = t.getBoundingClientRect(), mid = r.left + r.width / 2;
+      const before = drag.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING;
+      if (before && x > mid) { t.after(drag); break; }
+      if (!before && x < mid) { t.before(drag); break; }
+    }
+  }
+  function end() {
+    clearTimeout(timer); timer = null; cancelAnimationFrame(raf);
+    if (!drag) return;
+    const order = tabs().map(t => t.dataset.f);
+    S.focuses.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+    drag = null; bar.classList.remove("sorting"); justDragged = true; setTimeout(() => justDragged = false, 300);
+    save(); render();
+  }
+  function start(el, x, y) {
+    startX = lastX = x; startY = y;
+    timer = setTimeout(() => begin(el), 350);
+  }
+  bar.addEventListener("touchstart", e => {
+    const el = e.target.closest(".tab[data-f]"); if (!el || e.touches.length > 1) return;
+    start(el, e.touches[0].clientX, e.touches[0].clientY);
+  }, {passive: true});
+  bar.addEventListener("touchmove", e => {
+    const t = e.touches[0];
+    if (drag) { e.preventDefault(); move(t.clientX); return; }
+    if (timer && (Math.abs(t.clientX - startX) > 8 || Math.abs(t.clientY - startY) > 8)) { clearTimeout(timer); timer = null; }
+  }, {passive: false});
+  bar.addEventListener("touchend", end);
+  bar.addEventListener("touchcancel", end);
+  bar.addEventListener("contextmenu", e => { if (e.target.closest(".tab")) e.preventDefault(); });
+  // Mouse (desktop)
+  bar.addEventListener("mousedown", e => {
+    const el = e.target.closest(".tab[data-f]"); if (!el || e.button !== 0) return;
+    start(el, e.clientX, e.clientY);
+    const mm = ev => { if (drag) move(ev.clientX); else if (Math.abs(ev.clientX - startX) > 8) { clearTimeout(timer); timer = null; } };
+    const mu = () => { document.removeEventListener("mousemove", mm); document.removeEventListener("mouseup", mu); end(); };
+    document.addEventListener("mousemove", mm); document.addEventListener("mouseup", mu);
+  });
+  bar.addEventListener("click", e => { if (justDragged) { e.stopPropagation(); e.preventDefault(); } }, true);
+})();
 
 render();
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
