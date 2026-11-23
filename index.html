@@ -93,6 +93,30 @@ details.int .num{color:var(--faint)}
 .row{display:flex;gap:18px;margin-top:12px;font-family:var(--sans);font-size:.92rem}
 .row .primary{color:var(--amber);font-weight:500}
 .hist p{margin:10px 0 0;padding-left:12px;border-left:2px solid var(--rule);color:var(--soft);font-size:1rem}
+.seg{display:flex;gap:20px;margin:18px 0 0;font-family:var(--sans);font-size:.85rem}
+.seg button{color:var(--faint);padding:4px 0;border-bottom:1.5px solid transparent}
+.seg button[aria-pressed="true"]{color:var(--ink);border-color:var(--ink)}
+.scripts{list-style:none;margin:0;padding:0}
+.script{border-top:1px solid var(--rule);padding:18px 0}
+.script:last-child{border-bottom:1px solid var(--rule)}
+.script button{text-align:left;width:100%;display:block}
+.script .t{font-size:1.3rem;line-height:1.3}
+.script .pv{color:var(--soft);font-size:1.02rem;margin-top:6px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap}
+.script .sm{font-family:var(--sans);font-size:.75rem;color:var(--faint);margin-top:8px}
+.newscript{margin-top:18px;font-style:italic;color:var(--amber);font-size:1.1rem}
+.back{font-family:var(--sans);font-size:.85rem;color:var(--soft);margin:22px 0 0}
+.vers{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px}
+.vers button{font-family:var(--sans);font-size:.78rem;padding:5px 11px;border-radius:999px;border:1px solid var(--rule);color:var(--soft)}
+.vers button[aria-current="true"]{border-color:var(--amber);color:var(--amber)}
+.body{font-size:1.2rem;line-height:1.65;white-space:pre-wrap;margin:18px 0 0}
+.oldnote{font-family:var(--sans);font-size:.82rem;color:var(--soft);background:var(--amber-soft);border-radius:10px;padding:10px 12px;margin-top:12px;display:flex;justify-content:space-between;gap:10px;align-items:center}
+.oldnote button{color:var(--amber);font-weight:500;white-space:nowrap}
+.acts2{display:flex;gap:22px;flex-wrap:wrap;margin-top:26px;padding-top:14px;border-top:1px solid var(--rule);font-family:var(--sans);font-size:.9rem}
+.acts2 .primary{color:var(--amber);font-weight:500}
+.acts2 .danger{color:var(--red)}
+input.title{font:inherit;font-size:1.6rem;color:var(--ink);background:transparent;border:none;border-bottom:1px solid var(--rule);width:100%;padding:6px 0;margin-top:16px}
+input.title::placeholder{color:var(--faint);font-style:italic}
+textarea.long{font-size:1.15rem;line-height:1.65;min-height:55vh;margin-top:14px;border:none}
 .hist small{font-family:var(--sans);font-size:.72rem;color:var(--faint)}
 .help{font-family:var(--sans);font-size:.85rem;color:var(--soft);line-height:1.55}
 .help ol{padding-left:18px;margin:6px 0}
@@ -120,6 +144,9 @@ let S;
 try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
 if (!S || !Array.isArray(S.focuses)) S = {focuses: [], items: [], current: null, sort: "new"};
 if (!(S.sort in SORTS)) S.sort = "new";
+if (!Array.isArray(S.scripts)) S.scripts = [];
+if (!S.mode) S.mode = "affirm";
+let view = {t: "list"};
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { toast("Couldn't save"); } };
 let shuffleOrder = null, animate = true;
 
@@ -143,6 +170,13 @@ function render() {
     return;
   }
 
+  if (view.t === "script") return renderScript(f);
+  if (view.t === "edit") return renderEditor(f);
+  const head = `<header class="page"><div><h1>${esc(f.name)}</h1><p class="date">${today()}</p></div>
+      <button type="button" class="more" data-a="menu" aria-label="Focus options">⋯</button></header>
+    <div class="seg"><button type="button" data-a="mode" data-m="affirm" aria-pressed="${S.mode === "affirm"}">Affirmations</button><button type="button" data-a="mode" data-m="script" aria-pressed="${S.mode === "script"}">Scripts</button></div>`;
+  if (S.mode === "script") return renderScripts(f, head);
+
   let items = live(f.id);
   const pinCount = items.filter(i => i.pinned).length;
   if (S.sort === "old") items.sort((a, b) => a.created - b.created);
@@ -156,9 +190,7 @@ function render() {
       <span class="num"${i.pinned ? ' aria-label="Pinned"' : ""}>${i.pinned ? "✦" : roman(++n)}</span>
       <div><button type="button" class="txt" data-a="open">${esc(i.text)}</button></div></li>`).join("");
 
-  $("#main").innerHTML = `
-    <header class="page"><div><h1>${esc(f.name)}</h1><p class="date">${today()}</p></div>
-      <button type="button" class="more" data-a="menu" aria-label="Focus options">⋯</button></header>
+  $("#main").innerHTML = `${head}
     <div class="meta"><span>${items.length} line${items.length === 1 ? "" : "s"}${pinCount ? ` · ${pinCount} pinned` : ""}</span>
       <button type="button" data-a="sort">${SORTS[S.sort]} ▾</button></div>
     <ol class="lines">${lines}</ol>
@@ -173,6 +205,46 @@ function render() {
   ta.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addItem(); } });
 }
 const today = () => new Date().toLocaleDateString(undefined, {weekday:"long", month:"long", day:"numeric"});
+
+/* ---------- scripts ---------- */
+const cur = sc => sc.versions[sc.versions.length - 1];
+function renderScripts(f, head) {
+  const list = S.scripts.filter(x => x.focusId === f.id).sort((a, b) => cur(b).date - cur(a).date);
+  $("#main").innerHTML = `${head}
+    <div class="meta"><span>${list.length} script${list.length === 1 ? "" : "s"}</span></div>
+    ${list.length ? `<ol class="scripts">${list.map(sc => `<li class="script"><button type="button" data-a="openScript" data-s="${sc.id}">
+      <div class="t">${esc(sc.title || "Untitled")}</div><div class="pv">${esc(cur(sc).text)}</div>
+      <div class="sm">v${sc.versions.length} · ${fmt(cur(sc).date)}</div></button></li>`).join("")}</ol>`
+    : `<p class="hint" style="font-style:italic;color:var(--soft);margin:18px 0 0">Write it as if it's already happened. The same thoughts as your affirmations, told as a scene or a letter or a day in the life.</p>`}
+    <button type="button" class="newscript" data-a="newScript">+ Write a script</button>`;
+  animate = false;
+}
+function renderScript(f) {
+  const sc = S.scripts.find(x => x.id === view.id); if (!sc) { view = {t: "list"}; return render(); }
+  const n = sc.versions.length, vi = view.v ?? n - 1, v = sc.versions[vi];
+  $("#main").innerHTML = `<button type="button" class="back" data-a="toList">← ${esc(f.name)}</button>
+    <h1 style="margin-top:14px;font-size:2rem">${esc(sc.title || "Untitled")}</h1>
+    ${n > 1 ? `<div class="vers">${sc.versions.map((x, k) => `<button type="button" data-a="ver" data-k="${k}" aria-current="${k === vi}">v${k + 1}</button>`).join("")}</div>` : ""}
+    <p class="date">Version ${vi + 1} · ${fmt(v.date)}</p>
+    ${vi < n - 1 ? `<div class="oldnote"><span>This is an earlier version.</span><button type="button" data-a="restoreVer">Make it current</button></div>` : ""}
+    <div class="body">${esc(v.text)}</div>
+    <div class="acts2">
+      <button type="button" class="primary" data-a="revise">Write a new version</button>
+      <button type="button" data-a="fix">Edit this version</button>
+      <button type="button" class="danger" data-a="delScript">Delete</button>
+    </div>`;
+}
+function renderEditor(f) {
+  const sc = view.id && S.scripts.find(x => x.id === view.id);
+  const base = sc ? (view.how === "fix" ? sc.versions[view.v ?? sc.versions.length - 1].text : cur(sc).text) : "";
+  const label = !sc ? "New script" : view.how === "fix" ? "Editing this version" : `Version ${sc.versions.length + 1}`;
+  $("#main").innerHTML = `<button type="button" class="back" data-a="cancelEdit">← Cancel</button>
+    <p class="date" style="margin-top:14px">${label}${sc && view.how !== "fix" ? " · starts from your current version" : ""}</p>
+    <input class="title" id="scTitle" placeholder="Title" value="${esc(sc?.title || "")}" aria-label="Title">
+    <textarea class="long" id="scText" placeholder="It's a quiet morning and I…" aria-label="Script">${esc(base)}</textarea>
+    <div class="acts2"><button type="button" class="primary" data-a="saveScript">Save</button><button type="button" data-a="cancelEdit">Cancel</button></div>`;
+  setTimeout(() => (sc ? $("#scText") : $("#scTitle"))?.focus(), 50);
+}
 
 function addItem() {
   const ta = $("#newText"), text = ta.value.trim();
@@ -230,13 +302,41 @@ function reminderSheet() {
 
 document.addEventListener("click", async e => {
   const b = e.target.closest("button,.scrim"); if (!b) return;
-  if (b.dataset.f) { S.current = b.dataset.f; animate = true; save(); render(); window.scrollTo({top: 0}); return; }
+  if (b.dataset.f) { view = {t: "list"}; S.current = b.dataset.f; animate = true; save(); render(); window.scrollTo({top: 0}); return; }
   const a = b.dataset.a; if (!a) return;
   const holder = b.closest("[data-i]");
   const it = holder && S.items.find(x => x.id === holder.dataset.i);
   const inSheet = !!b.closest(".sheet");
   switch (a) {
     case "close": return closeSheet();
+    case "mode": S.mode = b.dataset.m; animate = true; save(); render(); return;
+    case "newScript": view = {t: "edit"}; render(); window.scrollTo({top: 0}); return;
+    case "openScript": view = {t: "script", id: b.dataset.s}; render(); window.scrollTo({top: 0}); return;
+    case "toList": view = {t: "list"}; render(); return;
+    case "ver": view.v = +b.dataset.k; render(); return;
+    case "revise": view = {t: "edit", id: view.id, how: "revise"}; render(); window.scrollTo({top: 0}); return;
+    case "fix": view = {t: "edit", id: view.id, how: "fix", v: view.v}; render(); window.scrollTo({top: 0}); return;
+    case "cancelEdit": view = view.id ? {t: "script", id: view.id} : {t: "list"}; render(); return;
+    case "saveScript": {
+      const title = $("#scTitle").value.trim(), text = $("#scText").value.trim();
+      if (!text) { toast("Write something first"); return; }
+      let sc = view.id && S.scripts.find(x => x.id === view.id);
+      if (!sc) { sc = {id: uid(), focusId: S.current, title, versions: [{text, date: Date.now()}], created: Date.now()}; S.scripts.push(sc); }
+      else {
+        sc.title = title;
+        if (view.how === "fix") { const k = view.v ?? sc.versions.length - 1; sc.versions[k].text = text; }
+        else if (text !== cur(sc).text) sc.versions.push({text, date: Date.now()});
+      }
+      view = {t: "script", id: sc.id}; save(); render(); window.scrollTo({top: 0}); toast("Saved"); return;
+    }
+    case "restoreVer": {
+      const sc = S.scripts.find(x => x.id === view.id); sc.versions.push({text: sc.versions[view.v].text, date: Date.now()});
+      view = {t: "script", id: sc.id}; save(); render(); toast("Saved as the current version"); return;
+    }
+    case "delScript": {
+      if (!confirm("Delete this script and all its versions?")) return;
+      S.scripts = S.scripts.filter(x => x.id !== view.id); view = {t: "list"}; save(); render(); return;
+    }
     case "open": return it && itemSheet(it);
     case "pin": it.pinned = !it.pinned; it.pinnedAt = Date.now(); toast(it.pinned ? "Pinned" : "Unpinned"); break;
     case "edit": itemSheet(it, true); setTimeout(() => $("#editText")?.focus(), 50); return;
@@ -259,9 +359,9 @@ document.addEventListener("click", async e => {
     }
     case "rename": { const f = focus(); const n = (prompt("Rename focus", f.name) || "").trim(); if (n) f.name = n; break; }
     case "delFocus": {
-      const f = focus(), n = S.items.filter(i => i.focusId === f.id).length;
-      if (!confirm(`Delete “${f.name}”${n ? ` and its ${n} line${n === 1 ? "" : "s"}` : ""}?`)) return;
-      S.focuses = S.focuses.filter(x => x !== f); S.items = S.items.filter(i => i.focusId !== f.id); S.current = null; break;
+      const f = focus(), n = S.items.filter(i => i.focusId === f.id).length + S.scripts.filter(x => x.focusId === f.id).length;
+      if (!confirm(`Delete “${f.name}”${n ? ` and everything in it (${n})` : ""}?`)) return;
+      S.focuses = S.focuses.filter(x => x !== f); S.items = S.items.filter(i => i.focusId !== f.id); S.scripts = S.scripts.filter(x => x.focusId !== f.id); S.current = null; view = {t: "list"}; break;
     }
     case "export": {
       const name = `affirmations-${new Date().toISOString().slice(0, 10)}.json`;
@@ -280,7 +380,7 @@ $("#importFile").onchange = async e => {
     const d = JSON.parse(await f.text());
     if (!Array.isArray(d.focuses) || !Array.isArray(d.items)) throw 0;
     if (!confirm("Replace everything here with this backup?")) return;
-    S = d; animate = true; save(); render(); toast("Backup restored");
+    S = d; if (!Array.isArray(S.scripts)) S.scripts = []; if (!S.mode) S.mode = "affirm"; view = {t: "list"}; animate = true; save(); render(); toast("Backup restored");
   } catch (_) { toast("That file isn't an Affirmations backup"); }
   e.target.value = "";
 };
