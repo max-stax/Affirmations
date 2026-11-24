@@ -93,7 +93,7 @@ details.int .num{color:var(--faint)}
 .row{display:flex;gap:18px;margin-top:12px;font-family:var(--sans);font-size:.92rem}
 .row .primary{color:var(--amber);font-weight:500}
 .hist p{margin:10px 0 0;padding-left:12px;border-left:2px solid var(--rule);color:var(--soft);font-size:1rem}
-.seg{display:flex;gap:20px;margin:18px 0 0;font-family:var(--sans);font-size:.85rem}
+.seg{display:flex;gap:22px;margin:0 0 6px;font-family:var(--sans);font-size:.85rem}
 .seg button{color:var(--faint);padding:4px 0;border-bottom:1.5px solid transparent}
 .seg button[aria-pressed="true"]{color:var(--ink);border-color:var(--ink)}
 .scripts{list-style:none;margin:0;padding:0}
@@ -125,6 +125,7 @@ textarea.long{font-size:1.15rem;line-height:1.65;min-height:55vh;margin-top:14px
 </head>
 <body>
 <div class="wrap">
+  <div class="seg" id="modes" role="group" aria-label="Section"></div>
   <nav class="tabs" id="tabs" aria-label="Focus areas"></nav>
   <main id="main"></main>
 </div>
@@ -158,6 +159,13 @@ const focus = () => S.focuses.find(f => f.id === S.current);
 const live = id => S.items.filter(i => i.focusId === id && !i.retired);
 
 function render() {
+  $("#modes").innerHTML = `<button type="button" data-a="mode" data-m="affirm" aria-pressed="${S.mode === "affirm"}">Affirmations</button><button type="button" data-a="mode" data-m="script" aria-pressed="${S.mode === "script"}">Scripts</button>`;
+  $("#tabs").hidden = S.mode === "script";
+  if (S.mode === "script") {
+    if (view.t === "script") return renderScript();
+    if (view.t === "edit") return renderEditor();
+    return renderScripts();
+  }
   if (!focus()) S.current = S.focuses[0]?.id || null;
   const f = focus();
   $("#tabs").innerHTML = S.focuses.map(x => `<button type="button" class="tab" data-f="${x.id}" aria-current="${x.id === S.current}">${esc(x.name)}</button>`).join("")
@@ -170,12 +178,8 @@ function render() {
     return;
   }
 
-  if (view.t === "script") return renderScript(f);
-  if (view.t === "edit") return renderEditor(f);
   const head = `<header class="page"><div><h1>${esc(f.name)}</h1><p class="date">${today()}</p></div>
-      <button type="button" class="more" data-a="menu" aria-label="Focus options">⋯</button></header>
-    <div class="seg"><button type="button" data-a="mode" data-m="affirm" aria-pressed="${S.mode === "affirm"}">Affirmations</button><button type="button" data-a="mode" data-m="script" aria-pressed="${S.mode === "script"}">Scripts</button></div>`;
-  if (S.mode === "script") return renderScripts(f, head);
+      <button type="button" class="more" data-a="menu" aria-label="Focus options">⋯</button></header>`;
 
   let items = live(f.id);
   const pinCount = items.filter(i => i.pinned).length;
@@ -208,21 +212,23 @@ const today = () => new Date().toLocaleDateString(undefined, {weekday:"long", mo
 
 /* ---------- scripts ---------- */
 const cur = sc => sc.versions[sc.versions.length - 1];
-function renderScripts(f, head) {
-  const list = S.scripts.filter(x => x.focusId === f.id).sort((a, b) => cur(b).date - cur(a).date);
+function renderScripts() {
+  const head = `<header class="page"><div><h1>Scripts</h1><p class="date">${today()}</p></div>
+      <button type="button" class="more" data-a="menu" aria-label="Options">⋯</button></header>`;
+  const list = S.scripts.slice().sort((a, b) => cur(b).date - cur(a).date);
   $("#main").innerHTML = `${head}
     <div class="meta"><span>${list.length} script${list.length === 1 ? "" : "s"}</span></div>
     ${list.length ? `<ol class="scripts">${list.map(sc => `<li class="script"><button type="button" data-a="openScript" data-s="${sc.id}">
       <div class="t">${esc(sc.title || "Untitled")}</div><div class="pv">${esc(cur(sc).text)}</div>
       <div class="sm">v${sc.versions.length} · ${fmt(cur(sc).date)}</div></button></li>`).join("")}</ol>`
-    : `<p class="hint" style="font-style:italic;color:var(--soft);margin:18px 0 0">Write it as if it's already happened. The same thoughts as your affirmations, told as a scene or a letter or a day in the life.</p>`}
+    : `<p class="hint" style="font-style:italic;color:var(--soft);margin:18px 0 0">Write it as if it's already happened. The same thoughts as your affirmations, told as a scene, a letter, or a day in the life.</p>`}
     <button type="button" class="newscript" data-a="newScript">+ Write a script</button>`;
   animate = false;
 }
-function renderScript(f) {
+function renderScript() {
   const sc = S.scripts.find(x => x.id === view.id); if (!sc) { view = {t: "list"}; return render(); }
   const n = sc.versions.length, vi = view.v ?? n - 1, v = sc.versions[vi];
-  $("#main").innerHTML = `<button type="button" class="back" data-a="toList">← ${esc(f.name)}</button>
+  $("#main").innerHTML = `<button type="button" class="back" data-a="toList">← Scripts</button>
     <h1 style="margin-top:14px;font-size:2rem">${esc(sc.title || "Untitled")}</h1>
     ${n > 1 ? `<div class="vers">${sc.versions.map((x, k) => `<button type="button" data-a="ver" data-k="${k}" aria-current="${k === vi}">v${k + 1}</button>`).join("")}</div>` : ""}
     <p class="date">Version ${vi + 1} · ${fmt(v.date)}</p>
@@ -234,7 +240,7 @@ function renderScript(f) {
       <button type="button" class="danger" data-a="delScript">Delete</button>
     </div>`;
 }
-function renderEditor(f) {
+function renderEditor() {
   const sc = view.id && S.scripts.find(x => x.id === view.id);
   const base = sc ? (view.how === "fix" ? sc.versions[view.v ?? sc.versions.length - 1].text : cur(sc).text) : "";
   const label = !sc ? "New script" : view.how === "fix" ? "Editing this version" : `Version ${sc.versions.length + 1}`;
@@ -279,6 +285,13 @@ function itemSheet(it, editing) {
 
 function menuSheet() {
   const f = focus();
+  if (S.mode === "script" || !f) return sheet(`<p class="sub">Options</p>
+    <div class="opts">
+      <button type="button" data-a="export">Export backup</button>
+      <button type="button" data-a="import">Import backup</button>
+      <button type="button" data-a="reminder">Daily reminder setup</button>
+    </div>
+    <p class="help" style="margin-top:14px">Everything is saved on this phone only, so export now and then.</p>`);
   sheet(`<p class="sub">${esc(f.name)}</p>
     <div class="opts">
       <button type="button" data-a="rename">Rename focus</button>
@@ -309,7 +322,7 @@ document.addEventListener("click", async e => {
   const inSheet = !!b.closest(".sheet");
   switch (a) {
     case "close": return closeSheet();
-    case "mode": S.mode = b.dataset.m; animate = true; save(); render(); return;
+    case "mode": view = {t: "list"}; S.mode = b.dataset.m; animate = true; save(); render(); return;
     case "newScript": view = {t: "edit"}; render(); window.scrollTo({top: 0}); return;
     case "openScript": view = {t: "script", id: b.dataset.s}; render(); window.scrollTo({top: 0}); return;
     case "toList": view = {t: "list"}; render(); return;
@@ -321,7 +334,7 @@ document.addEventListener("click", async e => {
       const title = $("#scTitle").value.trim(), text = $("#scText").value.trim();
       if (!text) { toast("Write something first"); return; }
       let sc = view.id && S.scripts.find(x => x.id === view.id);
-      if (!sc) { sc = {id: uid(), focusId: S.current, title, versions: [{text, date: Date.now()}], created: Date.now()}; S.scripts.push(sc); }
+      if (!sc) { sc = {id: uid(), title, versions: [{text, date: Date.now()}], created: Date.now()}; S.scripts.push(sc); }
       else {
         sc.title = title;
         if (view.how === "fix") { const k = view.v ?? sc.versions.length - 1; sc.versions[k].text = text; }
@@ -355,13 +368,13 @@ document.addEventListener("click", async e => {
     case "newFocus": {
       closeSheet();
       const name = (prompt("Name this focus (e.g. Art, Samyama, Abundance)") || "").trim(); if (!name) return;
-      const f = {id: uid(), name}; S.focuses.push(f); S.current = f.id; save(); render(); $("#newText")?.focus(); return;
+      const f = {id: uid(), name}; S.focuses.push(f); S.current = f.id; S.mode = "affirm"; view = {t: "list"}; save(); render(); $("#newText")?.focus(); return;
     }
     case "rename": { const f = focus(); const n = (prompt("Rename focus", f.name) || "").trim(); if (n) f.name = n; break; }
     case "delFocus": {
-      const f = focus(), n = S.items.filter(i => i.focusId === f.id).length + S.scripts.filter(x => x.focusId === f.id).length;
+      const f = focus(), n = S.items.filter(i => i.focusId === f.id).length;
       if (!confirm(`Delete “${f.name}”${n ? ` and everything in it (${n})` : ""}?`)) return;
-      S.focuses = S.focuses.filter(x => x !== f); S.items = S.items.filter(i => i.focusId !== f.id); S.scripts = S.scripts.filter(x => x.focusId !== f.id); S.current = null; view = {t: "list"}; break;
+      S.focuses = S.focuses.filter(x => x !== f); S.items = S.items.filter(i => i.focusId !== f.id); S.current = null; view = {t: "list"}; break;
     }
     case "export": {
       const name = `affirmations-${new Date().toISOString().slice(0, 10)}.json`;
