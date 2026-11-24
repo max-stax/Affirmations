@@ -234,7 +234,7 @@ function renderDiscovery() {
     <div class="meta"><span>${list.length} belief${list.length === 1 ? "" : "s"} uncovered</span></div>
     ${list.length ? `<ol class="disc">${list.map(d => `<li><button type="button" class="open" data-a="openDisc" data-d="${d.id}">
       <div class="d">${fmt(d.date)}</div><div class="b">“${esc(d.belief)}”</div>
-      ${part("What brought it up", d.source, "v")}${part("What I choose instead", d.reframe, "r")}</button></li>`).join("")}</ol>`
+      ${part("What brought it up", d.source, "v")}${part("How it protected me", d.protect, "v")}${part("Why it no longer holds", d.logic, "v")}${part("What I choose instead", d.reframe, "r")}</button></li>`).join("")}</ol>`
     : `<p style="font-style:italic;color:var(--soft);margin:18px 0 0">When an affirmation snags on something, a flinch, an “yeah right,” write down the belief underneath it here.</p>`}
     <button type="button" class="newscript" data-a="newDisc">+ Note a discovery</button>`;
 }
@@ -245,6 +245,10 @@ function renderDiscEditor() {
     <textarea class="box" id="dBelief" placeholder="Money has to be hard-earned">${esc(d?.belief || "")}</textarea>
     <label class="fld" for="dSource">What brought it up <span style="color:var(--faint)">· optional</span></label>
     <textarea class="box" id="dSource" placeholder="Saying “I am abundant” felt like a lie">${esc(d?.source || "")}</textarea>
+    <label class="fld" for="dProtect">How it protected me <span style="color:var(--faint)">· optional</span></label>
+    <textarea class="box" id="dProtect" placeholder="Kept me from being caught unprepared">${esc(d?.protect || "")}</textarea>
+    <label class="fld" for="dLogic">Why it no longer holds <span style="color:var(--faint)">· optional</span></label>
+    <textarea class="box" id="dLogic" placeholder="My best work has come from rested days">${esc(d?.logic || "")}</textarea>
     <label class="fld" for="dReframe">What I choose instead <span style="color:var(--faint)">· optional</span></label>
     <textarea class="box" id="dReframe" placeholder="Money can come with ease">${esc(d?.reframe || "")}</textarea>
     <div class="acts2"><button type="button" class="primary" data-a="saveDisc">Save</button><button type="button" data-a="cancelDisc">Cancel</button>
@@ -366,10 +370,10 @@ document.addEventListener("click", async e => {
     case "openDisc": view = {t: "dedit", id: b.dataset.d}; render(); window.scrollTo({top: 0}); return;
     case "cancelDisc": view = {t: "list"}; render(); return;
     case "saveDisc": {
-      const belief = $("#dBelief").value.trim(), source = $("#dSource").value.trim(), reframe = $("#dReframe").value.trim();
+      const belief = $("#dBelief").value.trim(), source = $("#dSource").value.trim(), protect = $("#dProtect").value.trim(), logic = $("#dLogic").value.trim(), reframe = $("#dReframe").value.trim();
       if (!belief) { toast("Write the belief first"); return; }
       const d = view.id && S.discoveries.find(x => x.id === view.id);
-      if (d) Object.assign(d, {belief, source, reframe}); else S.discoveries.push({id: uid(), belief, source, reframe, date: Date.now()});
+      if (d) Object.assign(d, {belief, source, protect, logic, reframe}); else S.discoveries.push({id: uid(), belief, source, protect, logic, reframe, date: Date.now()});
       view = {t: "list"}; save(); render(); window.scrollTo({top: 0}); toast("Saved"); return;
     }
     case "delDisc": {
