@@ -114,6 +114,17 @@ details.int .num{color:var(--faint)}
 .acts2{display:flex;gap:22px;flex-wrap:wrap;margin-top:26px;padding-top:14px;border-top:1px solid var(--rule);font-family:var(--sans);font-size:.9rem}
 .acts2 .primary{color:var(--amber);font-weight:500}
 .acts2 .danger{color:var(--red)}
+.disc{list-style:none;margin:0;padding:0}
+.disc li{border-top:1px solid var(--rule);padding:18px 0}
+.disc li:last-child{border-bottom:1px solid var(--rule)}
+.disc button.open{text-align:left;width:100%;display:block}
+.disc .d{font-family:var(--sans);font-size:.72rem;color:var(--faint);letter-spacing:.04em;text-transform:uppercase}
+.disc .b{font-size:1.25rem;line-height:1.4;margin-top:4px;font-style:italic}
+.disc .k{font-family:var(--sans);font-size:.72rem;color:var(--faint);margin-top:10px}
+.disc .v{font-size:1.02rem;color:var(--soft);white-space:pre-wrap}
+.disc .r{font-size:1.1rem;color:var(--ink);white-space:pre-wrap}
+.fld{display:block;font-family:var(--sans);font-size:.75rem;color:var(--soft);margin-top:20px}
+textarea.box{font-size:1.1rem;line-height:1.5;border:1px solid var(--rule);border-radius:10px;padding:10px 12px;margin-top:6px;min-height:4.5em;background:var(--sheet)}
 input.title{font:inherit;font-size:1.6rem;color:var(--ink);background:transparent;border:none;border-bottom:1px solid var(--rule);width:100%;padding:6px 0;margin-top:16px}
 input.title::placeholder{color:var(--faint);font-style:italic}
 textarea.long{font-size:1.15rem;line-height:1.65;min-height:55vh;margin-top:14px;border:none}
@@ -147,6 +158,7 @@ if (!S || !Array.isArray(S.focuses)) S = {focuses: [], items: [], current: null,
 if (!(S.sort in SORTS)) S.sort = "new";
 if (!Array.isArray(S.scripts)) S.scripts = [];
 if (!S.mode) S.mode = "affirm";
+if (!Array.isArray(S.discoveries)) S.discoveries = [];
 let view = {t: "list"};
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { toast("Couldn't save"); } };
 let shuffleOrder = null, animate = true;
@@ -159,8 +171,9 @@ const focus = () => S.focuses.find(f => f.id === S.current);
 const live = id => S.items.filter(i => i.focusId === id && !i.retired);
 
 function render() {
-  $("#modes").innerHTML = `<button type="button" data-a="mode" data-m="affirm" aria-pressed="${S.mode === "affirm"}">Affirmations</button><button type="button" data-a="mode" data-m="script" aria-pressed="${S.mode === "script"}">Scripts</button>`;
-  $("#tabs").hidden = S.mode === "script";
+  $("#modes").innerHTML = `<button type="button" data-a="mode" data-m="affirm" aria-pressed="${S.mode === "affirm"}">Affirmations</button><button type="button" data-a="mode" data-m="script" aria-pressed="${S.mode === "script"}">Scripts</button><button type="button" data-a="mode" data-m="discovery" aria-pressed="${S.mode === "discovery"}">Discovery</button>`;
+  $("#tabs").hidden = S.mode !== "affirm";
+  if (S.mode === "discovery") return view.t === "dedit" ? renderDiscEditor() : renderDiscovery();
   if (S.mode === "script") {
     if (view.t === "script") return renderScript();
     if (view.t === "edit") return renderEditor();
@@ -212,6 +225,33 @@ const today = () => new Date().toLocaleDateString(undefined, {weekday:"long", mo
 
 /* ---------- scripts ---------- */
 const cur = sc => sc.versions[sc.versions.length - 1];
+/* ---------- discovery ---------- */
+function renderDiscovery() {
+  const list = S.discoveries.slice().sort((a, b) => b.date - a.date);
+  const part = (k, v, cls) => v ? `<div class="k">${k}</div><div class="${cls}">${esc(v)}</div>` : "";
+  $("#main").innerHTML = `<header class="page"><div><h1>Discovery</h1><p class="date">${today()}</p></div>
+      <button type="button" class="more" data-a="menu" aria-label="Options">⋯</button></header>
+    <div class="meta"><span>${list.length} belief${list.length === 1 ? "" : "s"} uncovered</span></div>
+    ${list.length ? `<ol class="disc">${list.map(d => `<li><button type="button" class="open" data-a="openDisc" data-d="${d.id}">
+      <div class="d">${fmt(d.date)}</div><div class="b">“${esc(d.belief)}”</div>
+      ${part("What brought it up", d.source, "v")}${part("What I choose instead", d.reframe, "r")}</button></li>`).join("")}</ol>`
+    : `<p style="font-style:italic;color:var(--soft);margin:18px 0 0">When an affirmation snags on something, a flinch, an “yeah right,” write down the belief underneath it here.</p>`}
+    <button type="button" class="newscript" data-a="newDisc">+ Note a discovery</button>`;
+}
+function renderDiscEditor() {
+  const d = view.id && S.discoveries.find(x => x.id === view.id);
+  $("#main").innerHTML = `<button type="button" class="back" data-a="cancelDisc">← Cancel</button>
+    <label class="fld" for="dBelief">The belief I found</label>
+    <textarea class="box" id="dBelief" placeholder="Money has to be hard-earned">${esc(d?.belief || "")}</textarea>
+    <label class="fld" for="dSource">What brought it up <span style="color:var(--faint)">· optional</span></label>
+    <textarea class="box" id="dSource" placeholder="Saying “I am abundant” felt like a lie">${esc(d?.source || "")}</textarea>
+    <label class="fld" for="dReframe">What I choose instead <span style="color:var(--faint)">· optional</span></label>
+    <textarea class="box" id="dReframe" placeholder="Money can come with ease">${esc(d?.reframe || "")}</textarea>
+    <div class="acts2"><button type="button" class="primary" data-a="saveDisc">Save</button><button type="button" data-a="cancelDisc">Cancel</button>
+    ${d ? `<button type="button" class="danger" data-a="delDisc">Delete</button>` : ""}</div>`;
+  setTimeout(() => $("#dBelief")?.focus(), 50);
+}
+
 function renderScripts() {
   const head = `<header class="page"><div><h1>Scripts</h1><p class="date">${today()}</p></div>
       <button type="button" class="more" data-a="menu" aria-label="Options">⋯</button></header>`;
@@ -285,7 +325,7 @@ function itemSheet(it, editing) {
 
 function menuSheet() {
   const f = focus();
-  if (S.mode === "script" || !f) return sheet(`<p class="sub">Options</p>
+  if (S.mode !== "affirm" || !f) return sheet(`<p class="sub">Options</p>
     <div class="opts">
       <button type="button" data-a="export">Export backup</button>
       <button type="button" data-a="import">Import backup</button>
@@ -322,6 +362,20 @@ document.addEventListener("click", async e => {
   const inSheet = !!b.closest(".sheet");
   switch (a) {
     case "close": return closeSheet();
+    case "newDisc": view = {t: "dedit"}; render(); window.scrollTo({top: 0}); return;
+    case "openDisc": view = {t: "dedit", id: b.dataset.d}; render(); window.scrollTo({top: 0}); return;
+    case "cancelDisc": view = {t: "list"}; render(); return;
+    case "saveDisc": {
+      const belief = $("#dBelief").value.trim(), source = $("#dSource").value.trim(), reframe = $("#dReframe").value.trim();
+      if (!belief) { toast("Write the belief first"); return; }
+      const d = view.id && S.discoveries.find(x => x.id === view.id);
+      if (d) Object.assign(d, {belief, source, reframe}); else S.discoveries.push({id: uid(), belief, source, reframe, date: Date.now()});
+      view = {t: "list"}; save(); render(); window.scrollTo({top: 0}); toast("Saved"); return;
+    }
+    case "delDisc": {
+      if (!confirm("Delete this discovery?")) return;
+      S.discoveries = S.discoveries.filter(x => x.id !== view.id); view = {t: "list"}; save(); render(); return;
+    }
     case "mode": view = {t: "list"}; S.mode = b.dataset.m; animate = true; save(); render(); return;
     case "newScript": view = {t: "edit"}; render(); window.scrollTo({top: 0}); return;
     case "openScript": view = {t: "script", id: b.dataset.s}; render(); window.scrollTo({top: 0}); return;
@@ -393,7 +447,7 @@ $("#importFile").onchange = async e => {
     const d = JSON.parse(await f.text());
     if (!Array.isArray(d.focuses) || !Array.isArray(d.items)) throw 0;
     if (!confirm("Replace everything here with this backup?")) return;
-    S = d; if (!Array.isArray(S.scripts)) S.scripts = []; if (!S.mode) S.mode = "affirm"; view = {t: "list"}; animate = true; save(); render(); toast("Backup restored");
+    S = d; if (!Array.isArray(S.scripts)) S.scripts = []; if (!Array.isArray(S.discoveries)) S.discoveries = []; if (!S.mode) S.mode = "affirm"; view = {t: "list"}; animate = true; save(); render(); toast("Backup restored");
   } catch (_) { toast("That file isn't an Affirmations backup"); }
   e.target.value = "";
 };
