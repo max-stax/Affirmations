@@ -122,6 +122,12 @@ details.int .num{color:var(--faint)}
 .disc .b{font-size:1.25rem;line-height:1.4;margin-top:4px;font-style:italic}
 .disc .k{font-family:var(--sans);font-size:.72rem;color:var(--faint);margin-top:10px}
 .disc .v{font-size:1.02rem;color:var(--soft);white-space:pre-wrap}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.chip{font-family:var(--sans);font-size:.82rem;padding:6px 12px;border-radius:999px;border:1px solid var(--rule);color:var(--soft)}
+.chip[aria-pressed="true"]{background:var(--amber-soft);border-color:var(--amber);color:var(--amber)}
+.chip span{opacity:.7;margin-left:3px}
+.chip.addf{border-style:dashed}
+.go2{font-family:var(--sans);font-size:.85rem;color:var(--amber);margin-top:10px}
 .disc .r{font-size:1.1rem;color:var(--ink);white-space:pre-wrap}
 .fld{display:block;font-family:var(--sans);font-size:.75rem;color:var(--soft);margin-top:20px}
 textarea.box{font-size:1.1rem;line-height:1.5;border:1px solid var(--rule);border-radius:10px;padding:10px 12px;margin-top:6px;min-height:4.5em;background:var(--sheet)}
@@ -226,34 +232,53 @@ const today = () => new Date().toLocaleDateString(undefined, {weekday:"long", mo
 /* ---------- scripts ---------- */
 const cur = sc => sc.versions[sc.versions.length - 1];
 /* ---------- discovery ---------- */
+const FEELINGS = ["Anxiety", "Jealousy", "Insecurity", "Shame", "Humiliation", "Anger", "Fear", "Uncertainty", "Guilt", "Sadness"];
+let discFilter = null, draftFeel = new Set(), pendingAffirm = "";
+const allFeelings = () => [...new Set([...FEELINGS, ...(S.feelings || []), ...S.discoveries.flatMap(d => d.feelings || [])])];
 function renderDiscovery() {
-  const list = S.discoveries.slice().sort((a, b) => b.date - a.date);
+  const counts = {};
+  for (const d of S.discoveries) for (const f of d.feelings || []) counts[f] = (counts[f] || 0) + 1;
+  const pat = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  if (discFilter && !counts[discFilter]) discFilter = null;
+  const list = S.discoveries.filter(d => !discFilter || (d.feelings || []).includes(discFilter)).sort((a, b) => b.date - a.date);
   const part = (k, v, cls) => v ? `<div class="k">${k}</div><div class="${cls}">${esc(v)}</div>` : "";
   $("#main").innerHTML = `<header class="page"><div><h1>Discovery</h1><p class="date">${today()}</p></div>
       <button type="button" class="more" data-a="menu" aria-label="Options">⋯</button></header>
-    <div class="meta"><span>${list.length} belief${list.length === 1 ? "" : "s"} uncovered</span></div>
+    ${pat.length ? `<div class="fld" style="margin-top:16px">Patterns</div><div class="chips">${pat.map(([f, n]) =>
+      `<button type="button" class="chip" data-a="filt" data-v="${esc(f)}" aria-pressed="${discFilter === f}">${esc(f)} <span>${n}</span></button>`).join("")}</div>` : ""}
+    <div class="meta"><span>${discFilter ? `${list.length} with ${esc(discFilter.toLowerCase())}` : `${list.length} entr${list.length === 1 ? "y" : "ies"}`}</span>${discFilter ? `<button type="button" data-a="filt" data-v="">show all</button>` : ""}</div>
     ${list.length ? `<ol class="disc">${list.map(d => `<li><button type="button" class="open" data-a="openDisc" data-d="${d.id}">
-      <div class="d">${fmt(d.date)}</div><div class="b">“${esc(d.belief)}”</div>
-      ${part("What brought it up", d.source, "v")}${part("How it protected me", d.protect, "v")}${part("Why it no longer holds", d.logic, "v")}${part("What I choose instead", d.reframe, "r")}</button></li>`).join("")}</ol>`
-    : `<p style="font-style:italic;color:var(--soft);margin:18px 0 0">When an affirmation snags on something, a flinch, an “yeah right,” write down the belief underneath it here.</p>`}
+      <div class="d">${fmt(d.date)}${(d.feelings || []).length ? ` · ${d.feelings.map(esc).join(", ")}` : ""}</div>
+      ${d.belief ? `<div class="b">“${esc(d.belief)}”</div>` : d.thought ? `<div class="b">“${esc(d.thought)}”</div>` : ""}
+      ${part("What happened", d.source, "v")}${d.belief ? part("The thought", d.thought, "v") : ""}${part("The mirror", d.mirror, "v")}${part("How it protected me", d.protect, "v")}${part("Why it no longer holds", d.logic, "v")}${part("What I choose instead", d.reframe, "r")}</button></li>`).join("")}</ol>`
+    : `<p style="font-style:italic;color:var(--soft);margin:18px 0 0">When a feeling hits, or an affirmation snags on a “yeah right,” trace it down to the belief underneath.</p>`}
     <button type="button" class="newscript" data-a="newDisc">+ Note a discovery</button>`;
 }
 function renderDiscEditor() {
   const d = view.id && S.discoveries.find(x => x.id === view.id);
+  draftFeel = new Set(d?.feelings || []);
+  const opt = ' <span style="color:var(--faint)">· optional</span>';
+  const fld = (id, key, label, ph) => `<label class="fld" for="${id}">${label}${opt}</label>
+    <textarea class="box" id="${id}" placeholder="${ph}">${esc(d?.[key] || "")}</textarea>`;
   $("#main").innerHTML = `<button type="button" class="back" data-a="cancelDisc">← Cancel</button>
-    <label class="fld" for="dBelief">The belief I found</label>
-    <textarea class="box" id="dBelief" placeholder="Money has to be hard-earned">${esc(d?.belief || "")}</textarea>
-    <label class="fld" for="dSource">What brought it up <span style="color:var(--faint)">· optional</span></label>
-    <textarea class="box" id="dSource" placeholder="Saying “I am abundant” felt like a lie">${esc(d?.source || "")}</textarea>
-    <label class="fld" for="dProtect">How it protected me <span style="color:var(--faint)">· optional</span></label>
-    <textarea class="box" id="dProtect" placeholder="Kept me from being caught unprepared">${esc(d?.protect || "")}</textarea>
-    <label class="fld" for="dLogic">Why it no longer holds <span style="color:var(--faint)">· optional</span></label>
-    <textarea class="box" id="dLogic" placeholder="My best work has come from rested days">${esc(d?.logic || "")}</textarea>
-    <label class="fld" for="dReframe">What I choose instead <span style="color:var(--faint)">· optional</span></label>
-    <textarea class="box" id="dReframe" placeholder="Money can come with ease">${esc(d?.reframe || "")}</textarea>
+    <div class="fld">Feeling${opt}</div>
+    <div class="chips" id="feelChips">${allFeelings().map(f => `<button type="button" class="chip" data-a="feel" data-v="${esc(f)}" aria-pressed="${draftFeel.has(f)}">${esc(f)}</button>`).join("")}<button type="button" class="chip addf" data-a="addFeel">+ Other</button></div>
+    ${fld("dSource", "source", "What happened", "She spent the afternoon out with a coworker")}
+    ${fld("dThought", "thought", "The thought", "Women cheat")}
+    <label class="fld" for="dBelief">The belief underneath</label>
+    <textarea class="box" id="dBelief" placeholder="I can't fully trust her">${esc(d?.belief || "")}</textarea>
+    ${fld("dMirror", "mirror", "The mirror · where this lives in me", "Do I believe I'm enough to be chosen?")}
+    ${fld("dProtect", "protect", "How it protected me", "Kept me braced so I'd never be blindsided")}
+    ${fld("dLogic", "logic", "Why it no longer holds", "She's given me no reason to doubt her")}
+    ${fld("dReframe", "reframe", "What I choose instead", "I'm secure, and I trust the people I choose")}
+    <button type="button" class="go2" data-a="toAffirm">→ Add this to affirmations</button>
     <div class="acts2"><button type="button" class="primary" data-a="saveDisc">Save</button><button type="button" data-a="cancelDisc">Cancel</button>
     ${d ? `<button type="button" class="danger" data-a="delDisc">Delete</button>` : ""}</div>`;
-  setTimeout(() => $("#dBelief")?.focus(), 50);
+}
+function pickFocusSheet() {
+  if (!S.focuses.length) { toast("Create a focus in Affirmations first"); return; }
+  sheet(`<h3>Add to which focus?</h3><p class="sub">“${esc(pendingAffirm)}”</p>
+    <div class="opts">${S.focuses.map(f => `<button type="button" data-a="affirmTo" data-v="${f.id}">${esc(f.name)}</button>`).join("")}</div>`);
 }
 
 function renderScripts() {
@@ -370,11 +395,25 @@ document.addEventListener("click", async e => {
     case "openDisc": view = {t: "dedit", id: b.dataset.d}; render(); window.scrollTo({top: 0}); return;
     case "cancelDisc": view = {t: "list"}; render(); return;
     case "saveDisc": {
-      const belief = $("#dBelief").value.trim(), source = $("#dSource").value.trim(), protect = $("#dProtect").value.trim(), logic = $("#dLogic").value.trim(), reframe = $("#dReframe").value.trim();
-      if (!belief) { toast("Write the belief first"); return; }
+      const g = id => $(id).value.trim();
+      const e = {feelings: [...draftFeel], source: g("#dSource"), thought: g("#dThought"), belief: g("#dBelief"), mirror: g("#dMirror"), protect: g("#dProtect"), logic: g("#dLogic"), reframe: g("#dReframe")};
+      if (!e.belief && !e.thought && !e.feelings.length && !e.source) { toast("Write something first"); return; }
       const d = view.id && S.discoveries.find(x => x.id === view.id);
-      if (d) Object.assign(d, {belief, source, protect, logic, reframe}); else S.discoveries.push({id: uid(), belief, source, protect, logic, reframe, date: Date.now()});
+      if (d) Object.assign(d, e); else S.discoveries.push({id: uid(), ...e, date: Date.now()});
       view = {t: "list"}; save(); render(); window.scrollTo({top: 0}); toast("Saved"); return;
+    }
+    case "feel": { const v = b.dataset.v; draftFeel.has(v) ? draftFeel.delete(v) : draftFeel.add(v); b.setAttribute("aria-pressed", draftFeel.has(v)); return; }
+    case "addFeel": {
+      const v = (prompt("Name the feeling") || "").trim(); if (!v) return;
+      const name = v[0].toUpperCase() + v.slice(1);
+      S.feelings = [...new Set([...(S.feelings || []), name])]; save(); draftFeel.add(name);
+      b.insertAdjacentHTML("beforebegin", `<button type="button" class="chip" data-a="feel" data-v="${esc(name)}" aria-pressed="true">${esc(name)}</button>`); return;
+    }
+    case "filt": discFilter = b.dataset.v && discFilter !== b.dataset.v ? b.dataset.v : null; render(); return;
+    case "toAffirm": { pendingAffirm = $("#dReframe").value.trim(); if (!pendingAffirm) { toast("Write what you choose instead first"); return; } return pickFocusSheet(); }
+    case "affirmTo": {
+      S.items.push({id: uid(), focusId: b.dataset.v, text: pendingAffirm, pinned: false, history: [], created: Date.now(), retired: false});
+      save(); closeSheet(); toast(`Added to ${S.focuses.find(f => f.id === b.dataset.v)?.name}`); return;
     }
     case "delDisc": {
       if (!confirm("Delete this discovery?")) return;
