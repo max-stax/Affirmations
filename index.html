@@ -127,6 +127,8 @@ details.int .num{color:var(--faint)}
 .chip[aria-pressed="true"]{background:var(--amber-soft);border-color:var(--amber);color:var(--amber)}
 .chip span{opacity:.7;margin-left:3px}
 .chip.addf{border-style:dashed}
+.howto{font-family:var(--sans);font-size:.8rem;color:var(--amber);margin-top:6px}
+.help ol li{margin-bottom:8px}
 .go2{font-family:var(--sans);font-size:.85rem;color:var(--amber);margin-top:10px}
 .disc .r{font-size:1.1rem;color:var(--ink);white-space:pre-wrap}
 .fld{display:block;font-family:var(--sans);font-size:.75rem;color:var(--soft);margin-top:20px}
@@ -242,7 +244,7 @@ function renderDiscovery() {
   if (discFilter && !counts[discFilter]) discFilter = null;
   const list = S.discoveries.filter(d => !discFilter || (d.feelings || []).includes(discFilter)).sort((a, b) => b.date - a.date);
   const part = (k, v, cls) => v ? `<div class="k">${k}</div><div class="${cls}">${esc(v)}</div>` : "";
-  $("#main").innerHTML = `<header class="page"><div><h1>Discovery</h1><p class="date">${today()}</p></div>
+  $("#main").innerHTML = `<header class="page"><div><h1>Discovery</h1><p class="date">${today()}</p><button type="button" class="howto" data-a="discHelp">How this works</button></div>
       <button type="button" class="more" data-a="menu" aria-label="Options">⋯</button></header>
     ${pat.length ? `<div class="fld" style="margin-top:16px">Patterns</div><div class="chips">${pat.map(([f, n]) =>
       `<button type="button" class="chip" data-a="filt" data-v="${esc(f)}" aria-pressed="${discFilter === f}">${esc(f)} <span>${n}</span></button>`).join("")}</div>` : ""}
@@ -274,6 +276,23 @@ function renderDiscEditor() {
     <button type="button" class="go2" data-a="toAffirm">→ Add this to affirmations</button>
     <div class="acts2"><button type="button" class="primary" data-a="saveDisc">Save</button><button type="button" data-a="cancelDisc">Cancel</button>
     ${d ? `<button type="button" class="danger" data-a="delDisc">Delete</button>` : ""}</div>`;
+}
+function discHelpSheet() {
+  sheet(`<h3>How to use Discovery</h3><div class="help">
+    <p>When a feeling hits, or an affirmation snags on a “yeah right,” trace it down to the belief underneath.</p>
+    <ol>
+      <li><b>Feeling.</b> Name it. The tags build your patterns over time.</li>
+      <li><b>What happened.</b> The trigger, stated plainly.</li>
+      <li><b>The thought.</b> What your mind said in the moment.</li>
+      <li><b>The belief underneath.</b> The rule about yourself, others, or life that the thought comes from.</li>
+      <li><b>The mirror.</b> Flip who's doing it. If the belief is “I can't trust others,” look for where others don't trust you. If it's “people think my ideas are bad,” look for where you judge other people's ideas. Where you find it is where you work on it.</li>
+      <li><b>How it protected me.</b> What the belief kept you safe from.</li>
+      <li><b>Why it no longer holds.</b> The evidence against it now.</li>
+      <li><b>What I choose instead.</b> The new belief. Send it to Affirmations to repeat it.</li>
+    </ol>
+    <p>You don't need every field at once. Capture the feeling and what happened in the moment, and come back for the rest.</p>
+    <p>Tap a feeling under Patterns to see every entry with it.</p></div>
+    <div class="row"><button type="button" class="primary" data-a="close">Done</button></div>`);
 }
 function pickFocusSheet() {
   if (!S.focuses.length) { toast("Create a focus in Affirmations first"); return; }
@@ -410,6 +429,7 @@ document.addEventListener("click", async e => {
       b.insertAdjacentHTML("beforebegin", `<button type="button" class="chip" data-a="feel" data-v="${esc(name)}" aria-pressed="true">${esc(name)}</button>`); return;
     }
     case "filt": discFilter = b.dataset.v && discFilter !== b.dataset.v ? b.dataset.v : null; render(); return;
+    case "discHelp": return discHelpSheet();
     case "toAffirm": { pendingAffirm = $("#dReframe").value.trim(); if (!pendingAffirm) { toast("Write what you choose instead first"); return; } return pickFocusSheet(); }
     case "affirmTo": {
       S.items.push({id: uid(), focusId: b.dataset.v, text: pendingAffirm, pinned: false, history: [], created: Date.now(), retired: false});

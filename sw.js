@@ -1,5 +1,5 @@
 // Offline support: serve the app from cache, refresh it in the background.
-const CACHE = "affirm-v11";
+const CACHE = "affirm-v12";
 const FILES = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
 self.addEventListener("install", e => {
