@@ -366,6 +366,7 @@ function itemSheet(it, editing) {
     <div class="opts">
       <button type="button" data-a="pin">${it.pinned ? "Unpin" : "Pin to top"}</button>
       <button type="button" data-a="edit">Edit wording</button>
+      <button type="button" data-a="move">Move to another focus</button>
       <button type="button" data-a="retire">Mark as integrated <span class="help">· it's simply true now</span></button>
       <button type="button" class="danger" data-a="del">Delete</button>
     </div>${hist}</div>`);
@@ -468,6 +469,13 @@ document.addEventListener("click", async e => {
       S.scripts = S.scripts.filter(x => x.id !== view.id); view = {t: "list"}; save(); render(); return;
     }
     case "open": return it && itemSheet(it);
+    case "move": {
+      const others = S.focuses.filter(f => f.id !== it.focusId);
+      if (!others.length) { toast("Create another focus first"); return; }
+      return sheet(`<div data-i="${it.id}"><h3>Move to which focus?</h3><p class="sub">“${esc(it.text)}”</p>
+        <div class="opts">${others.map(f => `<button type="button" data-a="moveTo" data-v="${f.id}">${esc(f.name)}</button>`).join("")}</div></div>`);
+    }
+    case "moveTo": it.focusId = b.dataset.v; it.pinned = false; toast(`Moved to ${S.focuses.find(f => f.id === b.dataset.v)?.name}`); break;
     case "pin": it.pinned = !it.pinned; it.pinnedAt = Date.now(); toast(it.pinned ? "Pinned" : "Unpinned"); break;
     case "edit": itemSheet(it, true); setTimeout(() => $("#editText")?.focus(), 50); return;
     case "saveEdit": {
